@@ -61,11 +61,19 @@ Exemple:
 		// 5) Stats
 		link, totalClicks, err := linkService.GetLinkStats(shortCodeFlag)
 		if err != nil {
-			if errors.Is(err, gorm.ErrRecordNotFound) {
+			switch {
+			case errors.Is(err, services.ErrShortCodeRequired):
+				fmt.Fprintln(os.Stderr, err.Error())
+				os.Exit(1)
+			case errors.Is(err, services.ErrLinkNotFound):
 				fmt.Fprintf(os.Stderr, "Code court introuvable: %s\n", shortCodeFlag)
 				os.Exit(1)
+			case errors.Is(err, gorm.ErrRecordNotFound):
+				fmt.Fprintf(os.Stderr, "Code court introuvable: %s\n", shortCodeFlag)
+				os.Exit(1)
+			default:
+				log.Fatalf("FATAL: récupération stats: %v", err)
 			}
-			log.Fatalf("FATAL: récupération stats: %v", err)
 		}
 
 		fmt.Printf("Statistiques pour le code court: %s\n", link.ShortCode)
