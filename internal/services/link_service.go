@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"math/big"
+	"strings"
 	"time"
 
 	"gorm.io/gorm" // Nécessaire pour la gestion spécifique de gorm.ErrRecordNotFound
@@ -35,7 +36,7 @@ func NewLinkService(linkRepo repository.LinkRepository) *LinkService {
 func (s *LinkService) GenerateShortCode(length int) (string, error) {
 	result := make([]byte, length) // Crée un slice pour stocker le code
 	charsetLen := big.NewInt(int64(len(charset)))
-	
+
 	for i := 0; i < length; i++ {
 		// Génère un nombre aléatoire entre 0 et len(charset)-1
 		randomIndex, err := rand.Int(rand.Reader, charsetLen)
@@ -45,17 +46,17 @@ func (s *LinkService) GenerateShortCode(length int) (string, error) {
 		// Sélectionne un caractère aléatoire du charset
 		result[i] = charset[randomIndex.Int64()]
 	}
-	
+
 	return string(result), nil
 }
 
 // CreateLink crée un nouveau lien raccourci.
 // Il génère un code court unique, puis persiste le lien dans la base de données.
 func (s *LinkService) CreateLink(longURL string) (*models.Link, error) {
-	var shortCode string         // Variable pour stocker le code court généré
-	const maxRetries = 5         // Nombre maximum de tentatives pour trouver un code unique
-	var code string              // Variable temporaire pour chaque tentative de génération
-	var err error                // Variable pour capturer les erreurs
+	var shortCode string // Variable pour stocker le code court généré
+	const maxRetries = 5 // Nombre maximum de tentatives pour trouver un code unique
+	var code string      // Variable temporaire pour chaque tentative de génération
+	var err error        // Variable pour capturer les erreurs
 
 	for i := 0; i < maxRetries; i++ {
 		// Génère un code de 6 caractères
@@ -104,17 +105,27 @@ func (s *LinkService) CreateLink(longURL string) (*models.Link, error) {
 }
 
 // GetLinkByShortCode récupère un lien via son code court.
-// Il délègue l'opération de recherche au repository.
 func (s *LinkService) GetLinkByShortCode(shortCode string) (*models.Link, error) {
-	// Récupère un lien par son code court en utilisant le repository
-	return s.linkRepo.GetLinkByShortCode(shortCode)
+	code := strings.TrimSpace(shortCode)
+	if code == "" {
+		return nil, ErrShortCodeRequired
+	}
+
+	link, err := s.linkRepo.GetLinkByShortCode(code)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrLinkNotFound
+		}
+		return nil, err
+	}
+
+	return link, nil
 }
 
 // GetLinkStats récupère les statistiques pour un lien donné (nombre total de clics).
 // Il interagit avec le LinkRepository pour obtenir le lien, puis compte les clics.
 func (s *LinkService) GetLinkStats(shortCode string) (*models.Link, int, error) {
-	// Récupère le lien par son shortCode
-	link, err := s.linkRepo.GetLinkByShortCode(shortCode)
+	link, err := s.GetLinkByShortCode(shortCode)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -128,4 +139,3 @@ func (s *LinkService) GetLinkStats(shortCode string) (*models.Link, int, error) 
 	// Retourne le lien, le nombre de clics et aucune erreur
 	return link, clickCount, nil
 }
-

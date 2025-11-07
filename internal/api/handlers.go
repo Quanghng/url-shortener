@@ -9,7 +9,6 @@ import (
 	"github.com/Quanghng/url-shortener/internal/models"
 	"github.com/Quanghng/url-shortener/internal/services"
 	"github.com/gin-gonic/gin"
-	"gorm.io/gorm" // Pour gérer gorm.ErrRecordNotFound
 )
 
 // ClickEventsChannel est le channel global utilisé pour envoyer les événements de clic
@@ -78,8 +77,12 @@ func RedirectHandler(linkService *services.LinkService) gin.HandlerFunc {
 		// Récupérer l'URL longue associée au shortCode depuis le linkService
 		link, err := linkService.GetLinkByShortCode(shortCode)
 		if err != nil {
-			// Si le lien n'est pas trouvé, retourner HTTP 404 Not Found.
-			if errors.Is(err, gorm.ErrRecordNotFound) {
+			switch {
+			case errors.Is(err, services.ErrShortCodeRequired):
+				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+				return
+			case errors.Is(err, services.ErrLinkNotFound):
+				// Si le lien n'est pas trouvé, retourner HTTP 404 Not Found.
 				c.JSON(http.StatusNotFound, gin.H{"error": "Short link not found"})
 				return
 			}
@@ -120,8 +123,12 @@ func GetLinkStatsHandler(linkService *services.LinkService) gin.HandlerFunc {
 		// Appeler le LinkService pour obtenir le lien et le nombre total de clics
 		link, totalClicks, err := linkService.GetLinkStats(shortCode)
 		if err != nil {
-			// Gérer le cas où le lien n'est pas trouvé
-			if errors.Is(err, gorm.ErrRecordNotFound) {
+			switch {
+			case errors.Is(err, services.ErrShortCodeRequired):
+				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+				return
+			case errors.Is(err, services.ErrLinkNotFound):
+				// Gérer le cas où le lien n'est pas trouvé
 				c.JSON(http.StatusNotFound, gin.H{"error": "Short link not found"})
 				return
 			}
