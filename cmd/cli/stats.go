@@ -1,23 +1,23 @@
-// +build ignore
-
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"os"
 
 	cmd2 "github.com/Quanghng/url-shortener/cmd"
+	"github.com/Quanghng/url-shortener/internal/models"
 	"github.com/Quanghng/url-shortener/internal/repository"
 	"github.com/Quanghng/url-shortener/internal/services"
 	"github.com/spf13/cobra"
 
-	"gorm.io/driver/sqlite" // Driver SQLite pour GORM
+	"github.com/glebarez/sqlite" // Driver SQLite pur Go (CGO-free) pour GORM
 	"gorm.io/gorm"
 )
 
-// TODO : variable shortCodeFlag qui stockera la valeur du flag --code
-
+// Flag --code
+var shortCodeFlag string
 
 // StatsCmd représente la commande 'stats'
 var StatsCmd = &cobra.Command{
@@ -29,37 +29,44 @@ pour une URL courte spécifique en utilisant son code.
 Exemple:
   url-shortener stats --code="xyz123"`,
 	Run: func(cmd *cobra.Command, args []string) {
-		// TODO : Valider que le flag --code a été fourni.
-		// os.Exit(1) si erreur
-
-
-		// TODO : Charger la configuration chargée globalement via cmd.cfg
-
-
-		// TODO 3: Initialiser la connexion à la BDD.
-		// log.Fatalf si erreur
-
-
-
-		sqlDB, err := db.DB()
-		if err != nil {
-			log.Fatalf("FATAL: Échec de l'obtention de la base de données SQL sous-jacente: %v", err)
+		// 1) Valider flag
+		if shortCodeFlag == "" {
+			fmt.Fprintln(os.Stderr, "Le flag --code est requis")
+			os.Exit(1)
 		}
 
+		// 2) Config
+		cfg := cmd2.Cfg
 
-		// TODO S'assurer que la connexion est fermée à la fin de l'exécution de la commande grâce à defer
+		// 3) DB
+		db, err := gorm.Open(sqlite.Open(cfg.Database.Name), &gorm.Config{})
+		if err != nil {
+			log.Fatalf("FATAL: Échec ouverture DB: %v", err)
+		}
+		sqlDB, err := db.DB()
+		if err != nil {
+			log.Fatalf("FATAL: DB interne: %v", err)
+		}
+		defer sqlDB.Close()
 
+		// AutoMigrate minimal (si pas déjà fait)
+		if err := db.AutoMigrate(&models.Link{}, &models.Click{}); err != nil {
+			log.Fatalf("FATAL: migration: %v", err)
+		}
 
-		// TODO : Initialiser les repositories et services nécessaires NewLinkRepository & NewLinkService
-		linkRepo :=
-		linkService :=
+		// 4) Repo + Service
+		linkRepo := repository.NewLinkRepository(db)
+		linkService := services.NewLinkService(linkRepo)
 
-		// TODO 5: Appeler GetLinkStats pour récupérer le lien et ses statistiques.
-		// Attention, la fonction retourne 3 valeurs
-		// Pour l'erreur, utilisez gorm.ErrRecordNotFound
-		// Si erreur, os.Exit(1)
-
-
+		// 5) Stats
+		link, totalClicks, err := linkService.GetLinkStats(shortCodeFlag)
+		if err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				fmt.Fprintf(os.Stderr, "Code court introuvable: %s\n", shortCodeFlag)
+				os.Exit(1)
+			}
+			log.Fatalf("FATAL: récupération stats: %v", err)
+		}
 
 		fmt.Printf("Statistiques pour le code court: %s\n", link.ShortCode)
 		fmt.Printf("URL longue: %s\n", link.LongURL)
@@ -70,11 +77,10 @@ Exemple:
 // init() s'exécute automatiquement lors de l'importation du package.
 // Il est utilisé pour définir les flags que cette commande accepte.
 func init() {
-	// TODO : Définir le flag --code pour la commande stats.
+	// Flag --code
+	StatsCmd.Flags().StringVar(&shortCodeFlag, "code", "", "Code court pour lequel afficher les statistiques")
+	_ = StatsCmd.MarkFlagRequired("code")
 
-	// TODO Marquer le flag comme requis
-
-
-	// TODO : Ajouter la commande à RootCmd
+	cmd2.RootCmd.AddCommand(StatsCmd)
 
 }

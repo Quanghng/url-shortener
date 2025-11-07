@@ -9,7 +9,7 @@ import (
 // pour les opérations sur les clics. Cette abstraction permet à la couche service
 // de rester indépendante de l'implémentation spécifique de la base de données.
 type ClickRepository interface {
-	CreateClick(click *models.Click) error         // Créer un nouvel enregistrement de clic
+	CreateClick(click *models.Click) error        // Créer un nouvel enregistrement de clic
 	CountClicksByLinkID(linkID uint) (int, error) // Compter les clics pour un lien
 }
 
@@ -28,7 +28,10 @@ func NewClickRepository(db *gorm.DB) *GormClickRepository {
 // Elle reçoit un pointeur vers une structure models.Click et la persiste en utilisant GORM.
 func (r *GormClickRepository) CreateClick(click *models.Click) error {
 	// Utilise la méthode Create de GORM pour insérer le clic dans la table
-	return r.db.Create(click).Error
+	if err := r.db.Create(click).Error; err != nil {
+		return fmt.Errorf("failed to create click: %w", err)
+	}
+	return nil
 }
 
 // CountClicksByLinkID compte le nombre total de clics pour un ID de lien donné.
@@ -36,6 +39,8 @@ func (r *GormClickRepository) CreateClick(click *models.Click) error {
 func (r *GormClickRepository) CountClicksByLinkID(linkID uint) (int, error) {
 	var count int64 // GORM retourne un int64 pour les décomptes
 	// Model spécifie le modèle, Where filtre par LinkID, Count compte les enregistrements
-	err := r.db.Model(&models.Click{}).Where("link_id = ?", linkID).Count(&count).Error
-	return int(count), err // Convertit int64 en int et retourne avec l'erreur éventuelle
+	if err := r.db.Model(&models.Click{}).Where("link_id = ?", linkID).Count(&count).Error; err != nil {
+		return 0, fmt.Errorf("failed to count clicks: %w", err)
+	}
+	return int(count), nil // Convertit int64 en int et retourne avec l'erreur éventuelle
 }
