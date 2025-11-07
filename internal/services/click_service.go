@@ -1,8 +1,6 @@
 package services
 
 import (
-	"fmt"
-
 	"github.com/Quanghng/url-shortener/internal/models"
 	"github.com/Quanghng/url-shortener/internal/repository" // Importe le package repository
 )
