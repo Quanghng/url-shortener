@@ -14,6 +14,7 @@ import (
 
 	"github.com/glebarez/sqlite" // Driver SQLite pur Go (CGO-free) pour GORM
 	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 )
 
 // Flag --code
@@ -38,8 +39,10 @@ Exemple:
 		// 2) Config
 		cfg := cmd2.Cfg
 
-		// 3) DB
-		db, err := gorm.Open(sqlite.Open(cfg.Database.Name), &gorm.Config{})
+		// 3) DB avec logger silencieux
+		db, err := gorm.Open(sqlite.Open(cfg.Database.Name), &gorm.Config{
+			Logger: logger.Default.LogMode(logger.Silent),
+		})
 		if err != nil {
 			log.Fatalf("FATAL: Échec ouverture DB: %v", err)
 		}

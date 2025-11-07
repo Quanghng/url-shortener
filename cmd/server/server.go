@@ -21,6 +21,7 @@ import (
 	"github.com/spf13/cobra"
 	"gorm.io/driver/sqlite" // Driver SQLite pour GORM
 	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 )
 
 // RunServerCmd représente la commande 'run-server' de Cobra.
@@ -38,8 +39,10 @@ puis lance le serveur HTTP.`,
 			log.Fatalf("Configuration non initialisée. Exécutez d'abord 'migrate'.")
 		}
 
-		// Initialiser la connexion à la base de données
-		db, err := gorm.Open(sqlite.Open(cfg.Database.Name), &gorm.Config{})
+		// Initialiser la connexion à la base de données avec logger silencieux
+		db, err := gorm.Open(sqlite.Open(cfg.Database.Name), &gorm.Config{
+			Logger: logger.Default.LogMode(logger.Silent),
+		})
 		if err != nil {
 			log.Fatalf("Impossible de se connecter à la base de données: %v", err)
 		}

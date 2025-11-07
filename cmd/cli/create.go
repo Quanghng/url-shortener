@@ -13,6 +13,7 @@ import (
 	"github.com/glebarez/sqlite" // Driver SQLite pur Go (CGO-free) pour GORM
 	"github.com/spf13/cobra"
 	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 )
 
 // TODO : Faire une variable longURLFlag qui stockera la valeur du flag --url
@@ -40,11 +41,13 @@ Exemple:
 			os.Exit(1)
 		}
 
-		// TODO : Charger la configuration chargée globalement via cmd.cfg
+		// Charger la configuration chargée globalement via cmd.cfg
 		cfg := cmd2.Cfg
 
-		// TODO : Initialiser la connexion à la base de données SQLite.
-		db, err := gorm.Open(sqlite.Open(cfg.Database.Name), &gorm.Config{})
+		// Initialiser la connexion à la base de données SQLite avec logger silencieux
+		db, err := gorm.Open(sqlite.Open(cfg.Database.Name), &gorm.Config{
+			Logger: logger.Default.LogMode(logger.Silent),
+		})
 		if err != nil {
 			log.Fatalf("FATAL: Échec ouverture DB: %v", err)
 		}
