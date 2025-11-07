@@ -12,6 +12,7 @@ import (
 
 	cmd2 "github.com/Quanghng/url-shortener/cmd"
 	"github.com/Quanghng/url-shortener/internal/api"
+	"github.com/Quanghng/url-shortener/internal/middleware"
 	"github.com/Quanghng/url-shortener/internal/models"
 	"github.com/Quanghng/url-shortener/internal/monitor"
 	"github.com/Quanghng/url-shortener/internal/repository"
@@ -21,6 +22,7 @@ import (
 	"github.com/spf13/cobra"
 	"gorm.io/driver/sqlite" // Driver SQLite pour GORM
 	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 )
 
 // RunServerCmd représente la commande 'run-server' de Cobra.
@@ -32,42 +34,65 @@ var RunServerCmd = &cobra.Command{
 démarre les workers asynchrones pour les clics et le moniteur d'URLs,
 puis lance le serveur HTTP.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		// TODO : créer une variable qui stock la configuration chargée globalement via cmd.cfg
-		// Ne pas oublier la gestion d'erreur et faire un fatalF
+		// Récupérer la configuration chargée globalement via cmd2.Cfg
+		cfg := cmd2.Cfg
+		if cfg == nil {
+			log.Fatalf("Configuration non initialisée. Exécutez d'abord 'migrate'.")
+		}
 
-		// TODO : Initialiser la connexion à la bBDD
+		// Initialiser la connexion à la base de données avec logger silencieux
+		db, err := gorm.Open(sqlite.Open(cfg.Database.Name), &gorm.Config{
+			Logger: logger.Default.LogMode(logger.Silent),
+		})
+		if err != nil {
+			log.Fatalf("Impossible de se connecter à la base de données: %v", err)
+		}
 
-		// TODO : Initialiser les repositories.
-		// Créez des instances de GormLinkRepository et GormClickRepository.
+		// Initialiser les repositories
+		linkRepo := repository.NewLinkRepository(db)
+		clickRepo := repository.NewClickRepository(db)
 
 		// Laissez le log
 		log.Println("Repositories initialisés.")
 
-		// TODO : Initialiser les services métiers.
-		// Créez des instances de LinkService et ClickService, en leur passant les repositories nécessaires.
+		// Initialiser les services métiers
+		linkService := services.NewLinkService(linkRepo)
+		_ = services.NewClickService(clickRepo) // clickService pas utilisé pour l'instant
 
 		// Laissez le log
 		log.Println("Services métiers initialisés.")
 
-		// TODO : Initialiser le channel ClickEventsChannel (api/handlers) des événements de clic et lancer les workers (StartClickWorkers).
-		// Le channel est bufferisé avec la taille configurée.
-		// Passez le channel et le clickRepo aux workers.
+		// Initialiser le channel ClickEventsChannel avec la taille du buffer configurée
+		api.ClickEventsChannel = make(chan models.ClickEvent, cfg.Analytics.BufferSize)
 
-		// TODO : Remplacer les XXX par les bonnes variables
+		// Lancer les workers pour traiter les événements de clic
+		numWorkers := 3
+		workers.StartClickWorkers(numWorkers, api.ClickEventsChannel, clickRepo)
+
 		log.Printf("Channel d'événements de clic initialisé avec un buffer de %d. %d worker(s) de clics démarré(s).",
-			XXX, XXX)
+			cfg.Analytics.BufferSize, numWorkers)
 
-		// TODO : Initialiser et lancer le moniteur d'URLs.
-		// Utilisez l'intervalle configuré
-		monitorInterval := time.Duration(XXX) * time.Minute
-		urlMonitor := monitor.NewUrlMonitor() // Le moniteur a besoin du linkRepo et de l'interval
+		// Initialiser et lancer le moniteur d'URLs
+		monitorInterval := time.Duration(cfg.Monitor.IntervalMinutes) * time.Minute
+		urlMonitor := monitor.NewUrlMonitor(linkRepo, monitorInterval)
 
-		// TODO Lancez le moniteur dans sa propre goroutine.
+		// Lancer le moniteur dans sa propre goroutine
+		go urlMonitor.Start()
 
 		log.Printf("Moniteur d'URLs démarré avec un intervalle de %v.", monitorInterval)
 
-		// TODO : Configurer le routeur Gin et les handlers API.
-		// Passez les services nécessaires aux fonctions de configuration des routes.
+		// Configurer le routeur Gin et les handlers API (pas besoin de passer bufferSize maintenant)
+		router := gin.Default()
+		if cfg.Server.RateLimit.Requests > 0 && cfg.Server.RateLimit.WindowSeconds > 0 {
+			limiter := middleware.NewRateLimiter(
+				cfg.Server.RateLimit.Requests,
+				time.Duration(cfg.Server.RateLimit.WindowSeconds)*time.Second,
+			)
+			router.Use(limiter.Middleware())
+			log.Printf("Rate limiting activé: %d requêtes / %d seconde(s).",
+				cfg.Server.RateLimit.Requests, cfg.Server.RateLimit.WindowSeconds)
+		}
+		api.SetupRoutes(router, linkService)
 
 		// Pas toucher au log
 		log.Println("Routes API configurées.")
@@ -79,13 +104,18 @@ puis lance le serveur HTTP.`,
 			Handler: router,
 		}
 
-		// TODO : Démarrer le serveur Gin dans une goroutine anonyme pour ne pas bloquer.
-		// Pensez à logger des ptites informations...
+		// Démarrer le serveur Gin dans une goroutine anonyme pour ne pas bloquer
+		go func() {
+			log.Printf("Serveur démarré sur le port %d...", cfg.Server.Port)
+			if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+				log.Fatalf("Erreur lors du démarrage du serveur: %v", err)
+			}
+		}()
 
-		// Gére l'arrêt propre du serveur (graceful shutdown).
-		// TODO Créez un channel pour les signaux OS (SIGINT, SIGTERM), bufferisé à 1.
-		quit :=
-			signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM) // Attendre Ctrl+C ou signal d'arrêt
+		// Gérer l'arrêt propre du serveur (graceful shutdown)
+		// Créer un channel pour les signaux OS (SIGINT, SIGTERM), bufferisé à 1
+		quit := make(chan os.Signal, 1)
+		signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM) // Attendre Ctrl+C ou signal d'arrêt
 
 		// Bloquer jusqu'à ce qu'un signal d'arrêt soit reçu.
 		<-quit
@@ -100,5 +130,6 @@ puis lance le serveur HTTP.`,
 }
 
 func init() {
-	// TODO : ajouter la commande
+	// Ajouter la commande run-server au RootCmd
+	cmd2.RootCmd.AddCommand(RunServerCmd)
 }
