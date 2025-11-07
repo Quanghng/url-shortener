@@ -7,9 +7,9 @@ import (
 	"log"
 	"os"
 
-	cmd2 "github.com/Quanghnd/url-shortener/cmd"
-	"github.com/Quanghnd/url-shortener/internal/repository"
-	"github.com/Quanghnd/url-shortener/internal/services"
+	cmd2 "github.com/Quanghng/url-shortener/cmd"
+	"github.com/Quanghng/url-shortener/internal/repository"
+	"github.com/Quanghng/url-shortener/internal/services"
 	"github.com/spf13/cobra"
 
 	"gorm.io/driver/sqlite" // Driver SQLite pour GORM
