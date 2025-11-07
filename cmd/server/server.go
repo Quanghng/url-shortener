@@ -18,8 +18,8 @@ import (
 	"github.com/Quanghng/url-shortener/internal/services"
 	"github.com/Quanghng/url-shortener/internal/workers"
 	"github.com/gin-gonic/gin"
+	"github.com/glebarez/sqlite" // Driver SQLite pur Go (CGO-free) pour GORM
 	"github.com/spf13/cobra"
-	"gorm.io/driver/sqlite" // Driver SQLite pour GORM
 	"gorm.io/gorm"
 )
 
@@ -60,7 +60,7 @@ puis lance le serveur HTTP.`,
 
 		// Initialiser le channel ClickEventsChannel avec la taille du buffer configurée
 		api.ClickEventsChannel = make(chan models.ClickEvent, cfg.Analytics.BufferSize)
-		
+
 		// Lancer les workers pour traiter les événements de clic
 		numWorkers := 3
 		workers.StartClickWorkers(numWorkers, api.ClickEventsChannel, clickRepo)

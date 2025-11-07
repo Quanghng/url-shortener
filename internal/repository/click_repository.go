@@ -1,6 +1,8 @@
 package repository
 
 import (
+	"fmt"
+
 	"github.com/Quanghng/url-shortener/internal/models"
 	"gorm.io/gorm"
 )
